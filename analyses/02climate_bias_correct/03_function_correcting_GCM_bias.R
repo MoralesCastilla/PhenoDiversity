@@ -3,7 +3,7 @@
 #' 
 #' Read in climate data from GCMs daily projections
 #' Get climatology (mean for each day from 1950-1990 for each site)
-#' bias correction with respect to BEST data
+#' Bias correction of GCMs with respect to BEST data
 #' 
 #' Started 20th January 2017
 #' Ignacio Morales-Castilla, Benjamin I. Cook & Elizabeth M. Wolkovich
@@ -17,74 +17,73 @@ options(stringsAsFactors = FALSE)
 packs.to.extract<-list('raster','ncdf4','maptools','sp','foreach','doParallel','abind')
 lapply(packs.to.extract,require, character.only=T)
 
-## setting raster options to optimize
-#rasterOptions(format="CDF",overwrite=TRUE,maxmemory = 1e09, chunksize=1e08,progress="text") 
-#rasterTmpFile("clean_this_after_")
-#rasterOptions()
+#### Functions ####
 
-## source function
-#setwd("~/MEGA/Work_Harvard_postdoc/vitis/data/R/")
-#source("Meansubs_GCMs.R")
+#' Bias.correction.GCM.mean.rep - this function corrects daily temperature
+#' data in GCMs by replacing the climatology of GCM by that of BEST data.
+#' @param day - escalar indicating day of the year (1 to 365)
+#' @param GCMi - escalar indicating simulation number of GCM (1 to 30)
+#' @param GCM.folder - local folder containing GCM raw data (from
+#'        http://www.cesm.ucar.edu/projects/community-projects/LENS/)    
+#' @param output.folder - local folder to store results
+#' @param corrGCM.folder - local folder containing GCM daily climatologies (60 files*)
+#' 
+#' @return GCM.corr - raster stack with minimum and maximum temperatures corrected 
+#' 
+#' Note that: 
+#' 1) the below funtion needs the following files to be in the working directory:
+#' -"BEST.mean.clim_min.nc" - multi-layer raster file with 365 layers corresponding
+#' to each day of the year, with values for minimum daily temperatures averaged 
+#' across the 1950-1990 period, from BEST climate data 
+#' -"BEST.mean.clim_max.nc" - multi-layer raster file with 365 layers corresponding
+#' to each day of the year, with values for maximum daily temperatures averaged 
+#' across the 1950-1990 period, from BEST climate data
+#' 
+#' 2) *the below funtion needs the following files to be in the corrGCM.folder:
+#' -"GCM.climatology.tmin_XX.nc" - multi-layer raster file with 365 layers corresponding
+#' to each day of the year, with values for minimum daily temperatures averaged 
+#' across the 1950-1990 period, from GCM climate data 
+#' -"GCM.climatology.tmax_XX.nc" - multi-layer raster file with 365 layers corresponding
+#' to each day of the year, with values for maximum daily temperatures averaged 
+#' across the 1950-1990 period, from GCM climate data
+#' XX in file names should be replaced by values 1-30 corresponding to each
+#' GCM simulation, which yields a total of 60 files.
+#' 
 
-## load avg BEST climatologies
-#BEST.folder="~/MEGA/Work_Harvard_postdoc/vitis/data/Climate Data/BEST/"
-#setwd(BEST.folder)
-#BEST.mean.clim<-readRDS("BEST_avg_climatologies_interpolated.rds")
-#BEST.mean.clim.min<-brick("BEST.mean.clim_min.nc")
-#BEST.mean.clim.max<-brick("BEST.mean.clim_max.nc")
+Bias.correction.GCM.mean.rep<-function(day,GCMi,GCM.folder,
+                                       output.folder,corrGCM.folder){
 
-
-## load avg GCM climatologies 
-#setwd(GCM.folder)
-#corrGCM.folder<-"D:/Vitis_Data/climatefuture/GCMs_corrected/"
-corrGCM.folder<-"/n/wolkovich_lab/climatefuture/GCM_climatology/"
-#GCM.climatology<-GCM.climatology
-
-## function to extract and compare data
-GCM.folder="/n/wolkovich_lab/climatefuture/"
-#output.folder="/n/wolkovich_lab/Lab/Nacho/"
-output.folder="/n/wolkovich_lab/climatefuture/corrected_GCMs/"
-#GCM.folder="D:/Vitis_Data/climatefuture/GCMs/"
-#output.folder="D:/Vitis_Data/climatefuture/GCMs_corrected/"
-#GCMi<-2
-
-
-# open GCM as brick #
-Bias.correction.GCM.mean.rep<-function(day,GCMi,GCM.folder,output.folder,corrGCM.folder){
-
-#for(k in 1:20){
-    
-#GCMi<-1
 k<-as.numeric(GCMi)
-dfiles<-dir(GCM.folder)[1:40]
-#dfiles.fut<-dir(GCM.folder)[1:40]
+dfiles<-dir(GCM.folder)#[1:40]
 names1<-c(rep("_g16.00",9),rep("_g16.0",21))
-#names1<-c(rep("_g16.00",4))
 names2<-seq(1,30,1)
-#names2<-seq(1,3,1)
 names3<-c("20051231","20801231","21001231")
 namesi<-paste(names1,names2,sep="")
-#namesi<-namesi[-c(16:20)]
 list.years<-list(seq(1950,2005,1),seq(2006,2080,1),seq(2081,2100,1))
 dcorr.files<-dir(corrGCM.folder)
 dcorr.names<-paste("_",k,".nc",sep="")
 
 ## reading in BEST climatologies from nc
-BEST.mean.clim.min<-brick("BEST.mean.clim_min.nc")
-BEST.mean.clim.max<-brick("BEST.mean.clim_max.nc")
+BEST.mean.clim.min <- brick("BEST.mean.clim_min.nc")
+BEST.mean.clim.max <- brick("BEST.mean.clim_max.nc")
 
 
-#for(t in 1:1){ #t=1 
 ## setting files name
-nc.name.min<-dfiles[which(grepl(namesi[k],dfiles) & grepl("TREFHTMN",dfiles) & grepl(names3[t],dfiles))]
-nc.name.max<-dfiles[which(grepl(namesi[k],dfiles) & grepl("TREFHTMX",dfiles) & grepl(names3[t],dfiles))]
+nc.name.min <- dfiles[which(grepl(namesi[k],dfiles) & 
+                            grepl("TREFHTMN",dfiles) & grepl(names3[t],dfiles))]
+nc.name.max <- dfiles[which(grepl(namesi[k],dfiles) & 
+                            grepl("TREFHTMX",dfiles) & grepl(names3[t],dfiles))]
 
-daily.temp.GCM.min <- brick(paste(GCM.folder,nc.name.min,sep=""), varname="TREFHTMN", layer="time")
-daily.temp.GCM.max <- brick(paste(GCM.folder,nc.name.max,sep=""), varname="TREFHTMX", layer="time")
+daily.temp.GCM.min <- brick(paste(GCM.folder,nc.name.min,sep=""), 
+                            varname="TREFHTMN", layer="time")
+daily.temp.GCM.max <- brick(paste(GCM.folder,nc.name.max,sep=""), 
+                            varname="TREFHTMX", layer="time")
 
 ## setting files name for climatology
-nc.name.min.corr<-dcorr.files[which(grepl(dcorr.names,dcorr.files) & grepl("tmin",dcorr.files))]
-nc.name.max.corr<-dcorr.files[which(grepl(dcorr.names,dcorr.files) & grepl("tmax",dcorr.files))]
+nc.name.min.corr<-dcorr.files[which(grepl(dcorr.names,dcorr.files) & 
+                                      grepl("tmin",dcorr.files))]
+nc.name.max.corr<-dcorr.files[which(grepl(dcorr.names,dcorr.files) & 
+                                      grepl("tmax",dcorr.files))]
 
 # open climatology as brick #
 mean.each.min <- brick(paste(corrGCM.folder,nc.name.min.corr,sep=""))
@@ -167,13 +166,6 @@ names(daily.temp.GCM.max)<-dates
     GCM.corr.max<-rotate(daily.temp.GCM.max[[daily.index]]-273)-rotate(mean.each.max[[day]]-273)+BEST.mean.clim.max[[day]]
 
 
-## unlisting and stacking layers
-#GCM.corrected.min<-stack(unlist(GCM.corr.min))
-#GCM.corrected.max<-stack(unlist(GCM.corr.max))
-#GCM.corrected.min<-GCM.corr.min
-#GCM.corrected.max<-GCM.corr.max
-    
-
 ## naming the layers
 nyears<-list.years[[t]]
 DOY<-day
@@ -194,69 +186,10 @@ names.layers<-unlist(names.layers)
 names(GCM.corr.min)<-names.layers[1:nlayers(GCM.corr.min)]
 names(GCM.corr.max)<-names.layers[1:nlayers(GCM.corr.max)]
 
-#writeRaster(GCM.corrected.min,paste(output.folder,"GCM.",k,".Tmin",
-#            min(list.years[[t]]),"-",max(list.years[[t]]),".nc",sep=""),format="CDF",overwrite=TRUE)
-#writeRaster(GCM.corrected.max,paste(output.folder,"GCM.",k,".Tmax",
-#            min(list.years[[t]]),"-",max(list.years[[t]]),".nc",sep=""),format="CDF",overwrite=TRUE)
 
-
-#}
 GCM.corr<-stack(GCM.corr.min,GCM.corr.max)
 return(GCM.corr)
 
 }
 
 
-# paralellize code
-seqs<-list(seq(1,99,1),seq(100,198,1),seq(199,297,1),seq(298,365,1))
-list.years<-list(seq(1950,2005,1),seq(2006,2080,1),seq(2081,2100,1))
-cl <- makeCluster(24)
-registerDoParallel(cl)
-substrRight <- function(x, n){
-  substr(x, nchar(x)-n+1, nchar(x))
-}
-
-for (j in c(1,16,17,18,19)){
-  GCMi<-j
-  #list.store.mins<-list()
-  #list.store.maxs<-list()
-  
-  
-  for (i in 1:4){
-    print(i)
-    t=1
-    #k= #i
-    
-    Sys.time()
-    GCM.bias.corr<-foreach(day = seqs[[i]], .packages=c("raster","ncdf4"),
-                           .verbose=T,.errorhandling="pass",.combine=stack)  %dopar%  
-      Bias.correction.GCM.mean.rep(day,GCMi,GCM.folder,output.folder,corrGCM.folder)
-    
-    Sys.time()
-    #namesgcm<-names(GCM.bias.corr)
-    #last.char<-substrRight(namesgcm,1)
-    #list.store.mins[[i]]<-GCM.bias.corr[[which(last.char=="1")]]
-    #list.store.maxs[[i]]<-GCM.bias.corr[[which(last.char=="2")]]
-    save(GCM.bias.corr,file=paste(output.folder,"GCM.",GCMi,".Tempboth",
-                                  min(list.years[[t]]),"-",max(list.years[[t]]),"_day",
-                                  min(seqs[[i]]),"-",max(seqs[[i]]),".RData",sep=""))
-    
-  }
-  
-  #GCM.bias.corr.min<-stack(unlist(list.store.mins))
-  #GCM.bias.corr.max<-stack(unlist(list.store.maxs))
-  
-  #save(GCM.bias.corr[[which(last.char=="1")]],file=paste(output.folder,"GCM.",GCMi,".Tempmin",
-  #                                  min(list.years[[t]]),"-",max(list.years[[t]]),"_day",
-  #                                  min(seqs[[i]]),"-",max(seqs[[t]]),".RData",sep=""))
-  #save(GCM.bias.corr[[which(last.char=="2")]],file=paste(output.folder,"GCM.",GCMi,".Tempmax",
-  #                                  min(list.years[[t]]),"-",max(list.years[[t]]),"_day",
-  #                                  min(seqs[[i]]),"-",max(seqs[[t]]),".RData",sep=""))
-  
-  
-  Sys.time()
-  #rm(GCM.bias.corr.min,GCM.bias.corr.max,GCM.bias.corr,list.store.mins,list.store.maxs)
-  rm(GCM.bias.corr)
-}
-
-stopCluster(cl)

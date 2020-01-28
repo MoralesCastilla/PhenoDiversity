@@ -25,7 +25,6 @@
 #' @return Phenol.year.i - list of rasterStacks: containing values in DOY for Budbreak, Flowering and Veraison
 #'
 
-## function to project phenology for a given year
 Future.pheno.fx<-function(Year.pheno,target.folder,GCMi,period,varieties){
   
   ## names of layers to load

@@ -7,3 +7,8 @@ Code and data sources utilized in Morales-Castilla et al. (2020) to forecast phe
 
 The modelling workflow is as follows:
 
+1. Parameterization of phenological models (done externally through PMP V5.0 (Chuine et al. 2013).
+2. Climate data extraction, bias-correction and storing.
+3. Phenological forecasting (makes predictions of dates of budbreak, flowering and veraison, for a given year and variety). 
+4. Determination of the climatic envelope for maturation during a baseline period (1950-1980).
+5. Forecasting of the climatic envelope for the maturation process, for a given variety and year.
